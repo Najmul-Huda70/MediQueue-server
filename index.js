@@ -15,7 +15,7 @@ const rateLimit = require("express-rate-limit");
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 const MONGODB_URI = process.env.MONGODB_URI;
 const JWKS = `${process.env.CLIENT_URL}/api/auth/jwks`;
 
@@ -129,7 +129,7 @@ app.get("/tutors/:id", async (req, res, next) => {
         message: "Database is initializing, try again.",
       });
     }
-    const { id } = await req.params;
+    const { id } = req.params;
     const query = { _id: new ObjectId(id) };
     const result = await tutorsCollection.findOne(query);
     // findOne(): এই মেথডটির কাজ হলো কালেকশনের ভেতর খোঁজা এবং ফিল্টারের সাথে মিলে যাওয়া প্রথম এবং শুধুমাত্র একটি ডকুমেন্ট রিটার্ন করা।
@@ -140,10 +140,10 @@ app.get("/tutors/:id", async (req, res, next) => {
   }
 });
 // ==========================================
-// TODO 6. GLOBAL ERROR HANDLING & NOT FOUND (একদম শেষে থাকবে)
+// TODO 6. GLOBAL ERROR HANDLING & NOT FOUND
 // ==========================================
 
-// 404 handler (সব রুটের শেষে থাকতে হবে)
+// 404 handler
 app.use((req, res) => {
   res
     .status(404)
