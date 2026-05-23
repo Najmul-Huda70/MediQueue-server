@@ -92,8 +92,32 @@ async function connectDB() {
 
 connectDB();
 
+// ========================
+//TODO 4. VERIFY TOKEN
+// ========================
+const verifyToken = async (req, res, next) => {
+  const { authorization } = req.headers;
+  const token = authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ message: "Unauthorize" });
+  }
+  // console.log("verify token: ", token);
+  try {
+    const JWKS = createRemoteJWKSet(
+      new URL(`${process.env.CLIENT_URL}/api/auth/jwks`),
+    );
+    const { payload } = await jwtVerify(token, JWKS);
+    // return payload;
+    req.user = payload;
+    // console.log("req?.user : ", req.user);
+    next();
+  } catch (error) {
+    console.error("Token validation failed:", error);
+    return res.status(401).json({ message: "Unauthorize" });
+  }
+};
 // ==========================================
-//TODO 4. APPLICATION ROUTES
+//TODO 5. APPLICATION ROUTES
 // ==========================================
 
 app.get("/", (req, res) => {
@@ -104,22 +128,41 @@ app.get("/tutors", async (req, res, next) => {
   //Asynchronous Callback Function
   try {
     //Safety Guard / Early Return ,Fail-Fast Defense / Connection Guard Clause।
-    if (!tutorsCollection) {
-      return res.status(503).json({
-        success: false,
-        message: "Database is initializing, try again.",
-      });
+    // if (!tutorsCollection) {
+    //   return res.status(503).json({
+    //     success: false,
+    //     message: "Database is initializing, try again.",
+    //   });
+    // }
+    const { search } = req.query;
+    let query = {};
+    if (search) {
+      query = {
+        title: {
+          $regex: search,
+          $options: "i",
+        },
+      };
     }
-    const cursor = tutorsCollection.find(); //MongoDB Cursor Optimization
+
+    const cursor = tutorsCollection.find({
+      category: {
+        $regex: search,
+        $options: "i",
+      },
+    });
     const result = await cursor.toArray();
-    //find() মেথডটি ডাটাবেস থেকে সরাসরি সব ডাটা একসাথে মেমরিতে লোড করে না, বরং একটি Cursor (পয়েন্টার) রিটার্ন করে। পরবর্তীতে .toArray() ব্যবহার করে সেই কার্সার থেকে অ্যাসিনক্রোনাসলি (await দিয়ে) ডেটাগুলোকে জাভাস্ক্রিপ্ট অ্যারেতে কনভার্ট করা হয়।
-    res.json(result);
+
+    console.log("Found courses count: ", result.length);
+    res.send(result);
   } catch (error) {
     //Centralized Error Forwarding
     next(error);
   }
 });
-app.get("/tutors/:id", async (req, res, next) => {
+
+app.get("/tutors/:id", verifyToken, async (req, res, next) => {
+  console.log("user : ", req.user);
   //Asynchronous Callback Function
   try {
     //Safety Guard / Early Return ,Fail-Fast Defense / Connection Guard Clause।

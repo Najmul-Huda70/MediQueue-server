@@ -18,7 +18,8 @@
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.1.0",
     "jose-cjs": "^6.2.3",
-    "mongodb": "^7.2.0"
+    "mongodb": "^7.2.0",
+    "swiper": "^12.1.4"
   },
   "keywords": []
 }
