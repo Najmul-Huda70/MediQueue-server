@@ -8,6 +8,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const { createRemoteJWKSet, jwtVerify } = require("jose-cjs");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const { success } = require("better-auth");
 
 // ==========================================
 //TODO 1. CONFIGURATIONS & INITIALIZATION
@@ -81,6 +82,7 @@ async function connectDB() {
     await client.connect();
     const db = client.db("medidb");
     tutorsCollection = db.collection("tutors");
+    bookedCollection = db.collection("booked");
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!",
     );
@@ -123,49 +125,27 @@ const verifyToken = async (req, res, next) => {
 app.get("/", (req, res) => {
   res.send("Hello World!");
 });
-//GET Route Handler or API Endpoint
 app.get("/tutors", async (req, res, next) => {
-  //Asynchronous Callback Function
   try {
-    //Safety Guard / Early Return ,Fail-Fast Defense / Connection Guard Clause।
-    // if (!tutorsCollection) {
-    //   return res.status(503).json({
-    //     success: false,
-    //     message: "Database is initializing, try again.",
-    //   });
-    // }
-    const { search } = req.query;
-    let query = {};
-    if (search) {
-      query = {
-        title: {
-          $regex: search,
-          $options: "i",
-        },
-      };
+    //Database connection Guard or Fail-Fast Defense
+    if (!tutorsCollection) {
+      return res.status(503).json({
+        success: false,
+        message: "Database is initializing, try again.",
+      });
     }
 
-    const cursor = tutorsCollection.find({
-      category: {
-        $regex: search,
-        $options: "i",
-      },
-    });
+    //Fetching Data from Database
+    const cursor = tutorsCollection.find();
     const result = await cursor.toArray();
-
-    console.log("Found courses count: ", result.length);
     res.send(result);
   } catch (error) {
-    //Centralized Error Forwarding
     next(error);
   }
 });
-
 app.get("/tutors/:id", verifyToken, async (req, res, next) => {
-  console.log("user : ", req.user);
-  //Asynchronous Callback Function
   try {
-    //Safety Guard / Early Return ,Fail-Fast Defense / Connection Guard Clause।
+    //Database connection Guard or Fail-Fast Defense
     if (!tutorsCollection) {
       return res.status(503).json({
         success: false,
@@ -174,14 +154,103 @@ app.get("/tutors/:id", verifyToken, async (req, res, next) => {
     }
     const { id } = req.params;
     const query = { _id: new ObjectId(id) };
+    console.log("id: ", id);
+    //Fetching Data from Database
+
     const result = await tutorsCollection.findOne(query);
-    // findOne(): এই মেথডটির কাজ হলো কালেকশনের ভেতর খোঁজা এবং ফিল্টারের সাথে মিলে যাওয়া প্রথম এবং শুধুমাত্র একটি ডকুমেন্ট রিটার্ন করা।
-    res.json(result);
+
+    res.send(result);
   } catch (error) {
-    //Centralized Error Forwarding
     next(error);
   }
 });
+app.get("/booked", verifyToken, async (req, res, next) => {
+  try {
+    //Database connection Guard or Fail-Fast Defense
+    if (!bookedCollection) {
+      return res.status(503).json({
+        success: false,
+        message: "Database is initializing, try again.",
+      });
+    }
+    const userEmail = req.query.email;
+    let query = {};
+    if (userEmail) {
+      query = { studentEmail: userEmail };
+    }
+    const cursor = bookedCollection.find(query);
+    const result = await cursor.toArray();
+    res.send(result);
+  } catch (error) {
+    next(error);
+  }
+});
+app.get("/booked/:id", verifyToken, async (req, res, next) => {
+  try {
+    //Database connection Guard or Fail-Fast Defense
+    if (!bookedCollection) {
+      return res.status(503).json({
+        success: false,
+        message: "Database is initializing, try again.",
+      });
+    }
+    const { id } = req.params;
+    // console.log("booked ID: ", id);
+    let query = { _id: new ObjectId(id) };
+    const cursor = bookedCollection.find(query);
+    const result = await cursor.toArray();
+    // console.log("booked result: ", result);
+    res.send(result);
+  } catch (error) {
+    next(error);
+  }
+});
+app.patch("/booked/:id", verifyToken, async (req, res, next) => {
+  try {
+    //Database connection Guard or Fail-Fast Defense
+    if (!bookedCollection || !tutorsCollection) {
+      return res.status(503).json({
+        success: false,
+        message: "Database is initializing, try again.",
+      });
+    }
+    const { id } = req.params;
+    const bookedData = req.body;
+    if (!ObjectId.isValid(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid Tutor ID format" });
+    }
+    let query = { _id: new ObjectId(id) };
+    console.log("query._id: ", query);
+    //tutorsCollection find
+    const tutor = await tutorsCollection.findOne(query);
+    console.log("tutors: ", tutor);
+    if (!tutor) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Tutor not found!" });
+    }
+    //tutorsCollection Update
+    await tutorsCollection.updateOne(query, {
+      $inc: { bookedCount: 1 },
+      $set: { lastbookedAt: new Date() },
+    });
+    //bookedCollection Insert
+    const result = await bookedCollection.insertOne({
+      ...bookedData,
+      // tutorId: id,
+      bookedAt: new Date(),
+    });
+
+    console.log("booked result: ", result);
+    res.send(result);
+  } catch (error) {
+    console.error("Booking error:", error);
+    next(error);
+  }
+});
+
 // ==========================================
 // TODO 6. GLOBAL ERROR HANDLING & NOT FOUND
 // ==========================================
